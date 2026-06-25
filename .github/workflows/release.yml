@@ -23,13 +23,23 @@ jobs:
       - name: Build FileBullet.app
         run: ./make-app.sh
 
-      - name: Package app into a zip
+      - name: Package zip
         run: ditto -c -k --sequesterRsrc --keepParent FileBullet.app FileBullet.zip
+
+      - name: Package dmg
+        run: |
+          mkdir -p dmg/FileBullet
+          cp -R FileBullet.app dmg/FileBullet/
+          ln -s /Applications dmg/FileBullet/Applications
+          hdiutil create -volname FileBullet -srcfolder dmg/FileBullet \
+            -ov -format UDZO FileBullet.dmg
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: FileBullet.zip
+          files: |
+            FileBullet.dmg
+            FileBullet.zip
           generate_release_notes: true
           body: |
             FileBullet — нативный SFTP/FTP клиент для macOS.

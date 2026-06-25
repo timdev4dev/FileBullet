@@ -1,9 +1,19 @@
 # FileBullet (macOS)
 
-Простой нативный SFTP-клиент для macOS на SwiftUI. Позволяет подключаться к
-серверу по SSH/SFTP, ходить по папкам, смотреть файлы и **редактировать их во
-внешнем редакторе** — изменения автоматически заливаются обратно на сервер при
-каждом сохранении.
+[![CI](https://github.com/timdev4dev/FileBullet/actions/workflows/ci.yml/badge.svg)](https://github.com/timdev4dev/FileBullet/actions/workflows/ci.yml)
+[![Release](https://github.com/timdev4dev/FileBullet/actions/workflows/release.yml/badge.svg)](https://github.com/timdev4dev/FileBullet/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/timdev4dev/FileBullet)](https://github.com/timdev4dev/FileBullet/releases/latest)
+
+Простой нативный SFTP/FTP-клиент для macOS на SwiftUI. Позволяет подключаться к
+серверу по SSH/SFTP или FTP, ходить по папкам, смотреть файлы и **редактировать
+их во внешнем редакторе** — изменения автоматически заливаются обратно на сервер
+при каждом сохранении.
+
+## Установка
+
+Скачайте последнюю версию со страницы [**Releases**](https://github.com/timdev4dev/FileBullet/releases/latest):
+`FileBullet.dmg` (перетащите в Applications) или `FileBullet.zip`. Приложение
+подписано ad-hoc — при первом запуске: правый клик → **Открыть**.
 
 ## Возможности
 - Подключение по паролю (хост / порт / пользователь / пароль).
