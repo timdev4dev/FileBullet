@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build FileBullet.app
+        run: ./make-app.sh
+
+      - name: Package app into a zip
+        run: ditto -c -k --sequesterRsrc --keepParent FileBullet.app FileBullet.zip
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: FileBullet.zip
+          generate_release_notes: true
+          body: |
+            FileBullet — нативный SFTP/FTP клиент для macOS.
+
+            Скачайте `FileBullet.zip`, распакуйте и перетащите `FileBullet.app` в `/Applications`.
+            Приложение подписано ad-hoc, поэтому при первом запуске: правый клик → «Открыть».
