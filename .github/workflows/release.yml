@@ -42,7 +42,7 @@ jobs:
             FileBullet.zip
           generate_release_notes: true
           body: |
-            FileBullet — нативный SFTP/FTP клиент для macOS.
+            FileBullet — a native SFTP/FTP client for macOS.
 
-            Скачайте `FileBullet.zip`, распакуйте и перетащите `FileBullet.app` в `/Applications`.
-            Приложение подписано ad-hoc, поэтому при первом запуске: правый клик → «Открыть».
+            Download `FileBullet.dmg` and drag the app into Applications (or use `FileBullet.zip`).
+            The app is ad-hoc signed, so on first launch: right-click → Open.
