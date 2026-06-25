@@ -28,6 +28,8 @@ struct ConnectionConfig {
 protocol Backend: AnyObject {
     func connect() async throws
     func homeDirectory() async -> String
+    /// Lightweight no-op to keep an idle connection alive; throws if the link is dead.
+    func keepAlive() async throws
     func list(_ path: String) async throws -> [RemoteEntry]
     func readFile(_ path: String) async throws -> Data
     /// Writes `data` to `path`. `onProgress` receives byte deltas as they upload.

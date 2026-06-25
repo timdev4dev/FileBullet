@@ -34,7 +34,9 @@ final class SFTPManager: ObservableObject, Identifiable {
     @Published var draftKeyPath = ""
 
     private var backend: Backend?
+    private var config: ConnectionConfig?
     private var pollTimer: Timer?
+    private var keepAliveTimer: Timer?
     private var uploadTask: Task<Void, Never>?
 
     /// Per-connection cache subfolder so tabs don't clobber each other's files.
@@ -60,8 +62,10 @@ final class SFTPManager: ObservableObject, Identifiable {
             let backend = makeBackend(config)
             try await backend.connect()
             self.backend = backend
+            self.config = config
             self.isConnected = true
             self.connectedHost = host
+            startKeepAlive()
 
             let home = await backend.homeDirectory()
             await list(path: home)
@@ -75,8 +79,11 @@ final class SFTPManager: ObservableObject, Identifiable {
     func disconnect() async {
         pollTimer?.invalidate()
         pollTimer = nil
+        keepAliveTimer?.invalidate()
+        keepAliveTimer = nil
         await backend?.disconnect()
         backend = nil
+        config = nil
         isConnected = false
         entries = []
         openFiles = []
@@ -90,22 +97,84 @@ final class SFTPManager: ObservableObject, Identifiable {
     // MARK: - Browsing
 
     func list(path: String) async {
-        guard let backend else { return }
+        guard backend != nil else { return }
         isBusy = true
+        defer { isBusy = false }
         do {
-            var items = try await backend.list(path)
-                .filter { $0.name != "." && $0.name != ".." }
-            items.sort { a, b in
-                if a.isDirectory != b.isDirectory { return a.isDirectory }
-                return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
-            }
-            self.currentPath = path
-            self.entries = items
-            self.selectedEntryIDs = []
+            try await loadEntries(path)
         } catch {
-            status = loc("Couldn't read \(path): \(humanReadable(error))", "Не удалось прочитать \(path): \(humanReadable(error))", "Konnte \(path) nicht lesen: \(humanReadable(error))", "No se pudo leer \(path): \(humanReadable(error))")
+            // The connection may have been dropped on idle — reconnect and retry once.
+            if isConnectionError(error), await reconnect() {
+                do {
+                    try await loadEntries(path)
+                    return
+                } catch {
+                    status = loc("Couldn't read \(path): \(humanReadable(error))", "Не удалось прочитать \(path): \(humanReadable(error))", "Konnte \(path) nicht lesen: \(humanReadable(error))", "No se pudo leer \(path): \(humanReadable(error))")
+                }
+            } else {
+                status = loc("Couldn't read \(path): \(humanReadable(error))", "Не удалось прочитать \(path): \(humanReadable(error))", "Konnte \(path) nicht lesen: \(humanReadable(error))", "No se pudo leer \(path): \(humanReadable(error))")
+            }
         }
-        isBusy = false
+    }
+
+    private func loadEntries(_ path: String) async throws {
+        guard let backend else { throw BackendError(message: "Not connected") }
+        var items = try await backend.list(path)
+            .filter { $0.name != "." && $0.name != ".." }
+        items.sort { a, b in
+            if a.isDirectory != b.isDirectory { return a.isDirectory }
+            return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+        }
+        self.currentPath = path
+        self.entries = items
+        self.selectedEntryIDs = []
+    }
+
+    // MARK: - Keep-alive & reconnect
+
+    private func startKeepAlive() {
+        keepAliveTimer?.invalidate()
+        keepAliveTimer = Timer.scheduledTimer(withTimeInterval: 90, repeats: true) { [weak self] _ in
+            Task { @MainActor in await self?.keepAlivePing() }
+        }
+    }
+
+    private func keepAlivePing() async {
+        guard isConnected, !isBusy, !uploadInProgress, let backend else { return }
+        do {
+            try await backend.keepAlive()
+        } catch {
+            // Idle drop — re-establish quietly so the next action just works.
+            _ = await reconnect()
+        }
+    }
+
+    /// Rebuild the backend from the stored config, keeping the current folder.
+    @discardableResult
+    private func reconnect() async -> Bool {
+        guard let config else { return false }
+        await backend?.disconnect()
+        backend = nil
+        do {
+            let fresh = makeBackend(config)
+            try await fresh.connect()
+            backend = fresh
+            isConnected = true
+            return true
+        } catch {
+            isConnected = false
+            status = loc("Connection lost — reconnect failed.", "Соединение потеряно — переподключение не удалось.", "Verbindung verloren — erneut fehlgeschlagen.", "Conexión perdida — fallo al reconectar.")
+            return false
+        }
+    }
+
+    private func isConnectionError(_ error: Error) -> Bool {
+        let text = String(describing: error).lowercased()
+        for marker in ["closed", "channel", "eof", "broken", "reset",
+                       "not connected", "notconnected", "timed out", "connection"] {
+            if text.contains(marker) { return true }
+        }
+        return false
     }
 
     func refresh() async {

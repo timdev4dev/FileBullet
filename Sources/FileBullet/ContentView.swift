@@ -357,6 +357,13 @@ struct BrowserView: View {
     @State private var deleteTargets: [RemoteEntry] = []
     @State private var permTarget: RemoteEntry?
     @State private var isDropTarget = false
+    @State private var search = ""
+
+    private var filteredEntries: [RemoteEntry] {
+        let q = search.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return manager.entries }
+        return manager.entries.filter { $0.name.localizedCaseInsensitiveContains(q) }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -368,6 +375,7 @@ struct BrowserView: View {
                     .frame(minWidth: 200, idealWidth: 250, maxWidth: 360)
             }
         }
+        .onChange(of: manager.currentPath) { _, _ in search = "" }
         .confirmationDialog(
             deleteDialogTitle,
             isPresented: Binding(
@@ -431,6 +439,24 @@ struct BrowserView: View {
             .textFieldStyle(.roundedBorder)
             .disabled(true)
 
+            HStack(spacing: 4) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                    .font(.callout)
+                TextField(loc("Filter", "Фильтр", "Filter", "Filtrar"), text: $search)
+                    .textFieldStyle(.plain)
+                    .frame(width: 150)
+                if !search.isEmpty {
+                    Button { search = "" } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(RoundedRectangle(cornerRadius: 6).fill(.quaternary))
+
             if manager.isBusy {
                 ProgressView().controlSize(.small)
             }
@@ -469,7 +495,7 @@ struct BrowserView: View {
 
     private var fileList: some View {
         FileTableView(
-            entries: manager.entries,
+            entries: filteredEntries,
             badges: openBadges,
             selection: $manager.selectedEntryIDs,
             onOpen: { manager.open($0) },
@@ -493,8 +519,10 @@ struct BrowserView: View {
         )
         .frame(minWidth: 360)
         .overlay {
-            if manager.entries.isEmpty && !manager.isBusy {
-                Text(loc("Empty folder", "Пустая папка", "Leerer Ordner", "Carpeta vacía"))
+            if filteredEntries.isEmpty && !manager.isBusy {
+                Text(manager.entries.isEmpty
+                     ? loc("Empty folder", "Пустая папка", "Leerer Ordner", "Carpeta vacía")
+                     : loc("No matches", "Ничего не найдено", "Keine Treffer", "Sin coincidencias"))
                     .foregroundStyle(.secondary)
             }
         }

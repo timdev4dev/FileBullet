@@ -19,6 +19,9 @@ final class FTPBackend: Backend {
 
     func homeDirectory() async -> String { "/" }
 
+    // FTP opens a fresh curl connection per command, so nothing to keep alive.
+    func keepAlive() async throws {}
+
     func list(_ path: String) async throws -> [RemoteEntry] {
         let output = try await runCurl([url(for: path, isDirectory: true)])
         let text = String(decoding: output, as: UTF8.self)

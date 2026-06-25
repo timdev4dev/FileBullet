@@ -35,6 +35,11 @@ final class SFTPBackend: Backend {
         (try? await sftp?.getRealPath(atPath: ".")) ?? "."
     }
 
+    func keepAlive() async throws {
+        guard let sftp else { throw BackendError(message: "Not connected") }
+        _ = try await sftp.getRealPath(atPath: ".")
+    }
+
     func list(_ path: String) async throws -> [RemoteEntry] {
         guard let sftp else { throw BackendError(message: "Not connected") }
         let names = try await sftp.listDirectory(atPath: path)
