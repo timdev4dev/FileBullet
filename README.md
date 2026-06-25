@@ -8,6 +8,10 @@ A fast, native **SFTP / FTP client for macOS**, built with SwiftUI. Browse remot
 servers, edit files in your favourite editor with automatic upload-on-save,
 manage permissions, and move files around — all from a clean, Finder-like UI.
 
+> **About this project.** I built and polished FileBullet in a single day as part
+> of my "one day, one project" challenge. I'm a backend developer, and the goal
+> was to make a free, native alternative to the existing FTP/SFTP clients for macOS.
+
 <p align="center"><img src="icon/icon_1024.png" width="160" alt="FileBullet icon"></p>
 
 ## Screenshots
