@@ -10,6 +10,12 @@ manage permissions, and move files around — all from a clean, Finder-like UI.
 
 <p align="center"><img src="icon/icon_1024.png" width="160" alt="FileBullet icon"></p>
 
+## Screenshots
+
+| Browsing a server | New connection |
+| --- | --- |
+| ![File browser](docs/browser.png) | ![Connection screen](docs/connect.png) |
+
 ## Install
 
 Download the latest build from the [**Releases**](https://github.com/timdev4dev/FileBullet/releases/latest) page:
