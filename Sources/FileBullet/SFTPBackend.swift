@@ -127,6 +127,17 @@ final class SFTPBackend: Backend {
         try await sftp.setAttributes(at: path, to: attributes)
     }
 
+    func setOwner(_ path: String, owner: String, group: String?) async throws {
+        guard let client else { throw BackendError(message: "Not connected") }
+        let spec = group.map { "\(owner):\($0)" } ?? owner
+        let command = "chown \(shellQuote(spec)) -- \(shellQuote(path))"
+        _ = try await client.executeCommand(command, mergeStreams: true)
+    }
+
+    private func shellQuote(_ string: String) -> String {
+        "'" + string.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
     func disconnect() async {
         try? await sftp?.close()
         try? await client?.close()

@@ -66,6 +66,11 @@ final class FTPBackend: Backend {
         try await runQuote(["SITE CHMOD \(String(mode, radix: 8)) \(path)"], near: path)
     }
 
+    func setOwner(_ path: String, owner: String, group: String?) async throws {
+        let spec = group.map { "\(owner):\($0)" } ?? owner
+        try await runQuote(["SITE CHOWN \(spec) \(path)"], near: path)
+    }
+
     func disconnect() async {}
 
     // MARK: URLs

@@ -40,6 +40,7 @@ protocol Backend: AnyObject {
     func removeDirectory(_ path: String) async throws
     func makeDirectory(_ path: String) async throws
     func setPermissions(_ path: String, mode: UInt32) async throws
+    func setOwner(_ path: String, owner: String, group: String?) async throws
     func disconnect() async
 }
 

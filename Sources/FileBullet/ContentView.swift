@@ -396,8 +396,8 @@ struct BrowserView: View {
             Text(loc("This cannot be undone.", "Действие необратимо.", "Dies kann nicht rückgängig gemacht werden.", "Esto no se puede deshacer."))
         }
         .sheet(item: $permTarget) { entry in
-            PermissionsEditor(entry: entry) { mode in
-                Task { await manager.setPermissions(entry, mode: mode) }
+            PermissionsEditor(entry: entry) { mode, owner, group in
+                Task { await manager.applyAttributes(entry, mode: mode, owner: owner, group: group) }
             }
         }
         .alert(

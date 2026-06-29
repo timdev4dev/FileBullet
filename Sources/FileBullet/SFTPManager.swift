@@ -275,15 +275,27 @@ final class SFTPManager: ObservableObject, Identifiable {
         }
     }
 
-    func setPermissions(_ entry: RemoteEntry, mode: UInt32) async {
+    func applyAttributes(_ entry: RemoteEntry, mode: UInt32, owner: String, group: String) async {
         guard let backend else { return }
         let path = remoteJoin(currentPath, entry.name)
+        let newOwner = owner.trimmingCharacters(in: .whitespaces)
+        let newGroup = group.trimmingCharacters(in: .whitespaces)
+        let ownerChanged = !newOwner.isEmpty &&
+            (newOwner != (entry.owner ?? "") || newGroup != (entry.group ?? ""))
+        let modeChanged = mode != (entry.permissions ?? 0)
         do {
-            try await backend.setPermissions(path, mode: mode)
-            status = loc("Permissions changed: \(entry.name) → \(String(mode, radix: 8))", "Права изменены: \(entry.name) → \(String(mode, radix: 8))", "Rechte geändert: \(entry.name) → \(String(mode, radix: 8))", "Permisos cambiados: \(entry.name) → \(String(mode, radix: 8))")
-            await refresh()
+            if modeChanged {
+                try await backend.setPermissions(path, mode: mode)
+            }
+            if ownerChanged {
+                try await backend.setOwner(path, owner: newOwner, group: newGroup.isEmpty ? nil : newGroup)
+            }
+            if modeChanged || ownerChanged {
+                status = loc("Updated \(entry.name)", "Обновлено: \(entry.name)", "Aktualisiert: \(entry.name)", "Actualizado: \(entry.name)")
+                await refresh()
+            }
         } catch {
-            status = loc("Permissions error: \(humanReadable(error))", "Ошибка смены прав: \(humanReadable(error))", "Fehler bei Rechten: \(humanReadable(error))", "Error de permisos: \(humanReadable(error))")
+            status = loc("Attributes error: \(humanReadable(error))", "Ошибка атрибутов: \(humanReadable(error))", "Attribut-Fehler: \(humanReadable(error))", "Error de atributos: \(humanReadable(error))")
         }
     }
 
