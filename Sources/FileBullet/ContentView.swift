@@ -457,6 +457,15 @@ struct BrowserView: View {
             }
             .help(loc("Add current folder to favorites", "Добавить текущую папку в избранное", "Aktuellen Ordner zu Favoriten", "Añadir carpeta a favoritos"))
 
+            Button {
+                deleteTargets = selectedEntries
+            } label: {
+                Image(systemName: "trash")
+            }
+            .help(loc("Delete selection (⌘⌫)", "Удалить выделенное (⌘⌫)", "Auswahl löschen (⌘⌫)", "Eliminar selección (⌘⌫)"))
+            .keyboardShortcut(.delete, modifiers: .command)
+            .disabled(manager.selectedEntryIDs.isEmpty)
+
             TextField(loc("Path", "Путь", "Pfad", "Ruta"), text: Binding(
                 get: { manager.currentPath },
                 set: { _ in }
@@ -500,6 +509,10 @@ struct BrowserView: View {
         }
         let c = deleteTargets.count
         return loc("Delete \(c) items?", "Удалить объектов: \(c)?", "\(c) Objekte löschen?", "¿Eliminar \(c) elementos?")
+    }
+
+    private var selectedEntries: [RemoteEntry] {
+        manager.entries.filter { manager.selectedEntryIDs.contains($0.id) }
     }
 
     private func openSelected() {
