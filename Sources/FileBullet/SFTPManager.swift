@@ -249,6 +249,32 @@ final class SFTPManager: ObservableObject, Identifiable {
         }
     }
 
+    func createFolder(_ name: String) async {
+        guard let backend else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.contains("/") else { return }
+        do {
+            try await backend.makeDirectory(remoteJoin(currentPath, trimmed))
+            status = loc("Folder created: \(trimmed)", "Папка создана: \(trimmed)", "Ordner erstellt: \(trimmed)", "Carpeta creada: \(trimmed)")
+            await refresh()
+        } catch {
+            status = loc("Couldn't create folder: \(humanReadable(error))", "Не удалось создать папку: \(humanReadable(error))", "Ordner-Fehler: \(humanReadable(error))", "Error al crear carpeta: \(humanReadable(error))")
+        }
+    }
+
+    func createFile(_ name: String) async {
+        guard let backend else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.contains("/") else { return }
+        do {
+            try await backend.writeFile(remoteJoin(currentPath, trimmed), data: Data(), onProgress: { _ in })
+            status = loc("File created: \(trimmed)", "Файл создан: \(trimmed)", "Datei erstellt: \(trimmed)", "Archivo creado: \(trimmed)")
+            await refresh()
+        } catch {
+            status = loc("Couldn't create file: \(humanReadable(error))", "Не удалось создать файл: \(humanReadable(error))", "Datei-Fehler: \(humanReadable(error))", "Error al crear archivo: \(humanReadable(error))")
+        }
+    }
+
     func setPermissions(_ entry: RemoteEntry, mode: UInt32) async {
         guard let backend else { return }
         let path = remoteJoin(currentPath, entry.name)

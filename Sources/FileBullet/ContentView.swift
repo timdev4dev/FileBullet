@@ -358,6 +358,10 @@ struct BrowserView: View {
     @State private var permTarget: RemoteEntry?
     @State private var isDropTarget = false
     @State private var search = ""
+    @State private var newItemKind: NewItemKind?
+    @State private var newItemName = ""
+
+    enum NewItemKind { case folder, file }
 
     private var filteredEntries: [RemoteEntry] {
         let q = search.trimmingCharacters(in: .whitespaces)
@@ -394,6 +398,27 @@ struct BrowserView: View {
         .sheet(item: $permTarget) { entry in
             PermissionsEditor(entry: entry) { mode in
                 Task { await manager.setPermissions(entry, mode: mode) }
+            }
+        }
+        .alert(
+            newItemKind == .folder
+                ? loc("New Folder", "Новая папка", "Neuer Ordner", "Nueva carpeta")
+                : loc("New File", "Новый файл", "Neue Datei", "Nuevo archivo"),
+            isPresented: Binding(
+                get: { newItemKind != nil },
+                set: { if !$0 { newItemKind = nil } }
+            )
+        ) {
+            TextField(loc("Name", "Имя", "Name", "Nombre"), text: $newItemName)
+            Button(loc("Cancel", "Отмена", "Abbrechen", "Cancelar"), role: .cancel) { newItemKind = nil }
+            Button(loc("Create", "Создать", "Erstellen", "Crear")) {
+                let name = newItemName
+                let kind = newItemKind
+                Task {
+                    if kind == .folder { await manager.createFolder(name) }
+                    else { await manager.createFile(name) }
+                }
+                newItemKind = nil
             }
         }
     }
@@ -515,6 +540,8 @@ struct BrowserView: View {
                 favorites.add(host: manager.connectedHost,
                               path: remoteJoin(manager.currentPath, entry.name))
             },
+            onNewFolder: { newItemName = ""; newItemKind = .folder },
+            onNewFile: { newItemName = ""; newItemKind = .file },
             onRefresh: { Task { await manager.refresh() } }
         )
         .frame(minWidth: 360)

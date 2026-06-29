@@ -24,6 +24,8 @@ struct FileTableView: NSViewRepresentable {
     var onPermissions: (RemoteEntry) -> Void
     var onDelete: ([RemoteEntry]) -> Void
     var onFavorite: (RemoteEntry) -> Void
+    var onNewFolder: () -> Void
+    var onNewFile: () -> Void
     var onRefresh: () -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -350,6 +352,9 @@ struct FileTableView: NSViewRepresentable {
             guard let table, table.clickedRow >= 0, table.clickedRow < entries.count else {
                 contextEntry = nil
                 contextRow = -1
+                addItem(menu, loc("New Folder…", "Создать папку…", "Neuer Ordner…", "Nueva carpeta…"), #selector(ctxNewFolder))
+                addItem(menu, loc("New File…", "Создать файл…", "Neue Datei…", "Nuevo archivo…"), #selector(ctxNewFile))
+                menu.addItem(.separator())
                 addItem(menu, loc("Refresh", "Обновить", "Aktualisieren", "Actualizar"), #selector(ctxRefresh))
                 return
             }
@@ -412,6 +417,9 @@ struct FileTableView: NSViewRepresentable {
             addItem(menu, loc("Permissions…", "Права доступа…", "Rechte…", "Permisos…"), #selector(ctxPermissions))
             menu.addItem(.separator())
             addItem(menu, loc("Delete", "Удалить", "Löschen", "Eliminar"), #selector(ctxDelete))
+            menu.addItem(.separator())
+            addItem(menu, loc("New Folder…", "Создать папку…", "Neuer Ordner…", "Nueva carpeta…"), #selector(ctxNewFolder))
+            addItem(menu, loc("New File…", "Создать файл…", "Neue Datei…", "Nuevo archivo…"), #selector(ctxNewFile))
             menu.addItem(.separator())
             addItem(menu, loc("Refresh", "Обновить", "Aktualisieren", "Actualizar"), #selector(ctxRefresh))
         }
@@ -507,6 +515,14 @@ struct FileTableView: NSViewRepresentable {
 
         @objc private func ctxRefresh() {
             parent.onRefresh()
+        }
+
+        @objc private func ctxNewFolder() {
+            parent.onNewFolder()
+        }
+
+        @objc private func ctxNewFile() {
+            parent.onNewFile()
         }
 
         @objc private func ctxFavorite() {
