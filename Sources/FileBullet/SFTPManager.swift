@@ -15,6 +15,16 @@ final class SFTPManager: ObservableObject, Identifiable {
     @Published var entries: [RemoteEntry] = []
     @Published var openFiles: [OpenFile] = []
     @Published var selectedEntryIDs: Set<RemoteEntry.ID> = []
+    @Published var clipboard: [ClipboardItem] = []
+    /// True when the last create/paste/duplicate can be undone (in this folder).
+    @Published private(set) var canUndo = false
+    private var undoItems: [(path: String, isDir: Bool)] = []
+
+    // Built-in SSH command console.
+    @Published private(set) var shellSupported = false
+    @Published var terminalVisible = false
+    @Published var terminalBusy = false
+    @Published var terminalLog = ""
 
     // Drag & drop upload progress (byte-level).
     @Published var uploadInProgress = false
@@ -65,6 +75,7 @@ final class SFTPManager: ObservableObject, Identifiable {
             self.config = config
             self.isConnected = true
             self.connectedHost = host
+            self.shellSupported = backend.supportsShell
             startKeepAlive()
 
             let home = await backend.homeDirectory()
@@ -90,6 +101,9 @@ final class SFTPManager: ObservableObject, Identifiable {
         selectedEntryIDs = []
         currentPath = "."
         connectedHost = ""
+        shellSupported = false
+        terminalVisible = false
+        terminalLog = ""
         tabTitle = loc("New connection", "Новое подключение", "Neue Verbindung", "Nueva conexión")
         status = loc("Disconnected.", "Отключено.", "Getrennt.", "Desconectado.")
     }
@@ -98,6 +112,7 @@ final class SFTPManager: ObservableObject, Identifiable {
 
     func list(path: String) async {
         guard backend != nil else { return }
+        if path != currentPath { clearUndo() }   // undo only applies to its folder
         isBusy = true
         defer { isBusy = false }
         do {
@@ -254,9 +269,11 @@ final class SFTPManager: ObservableObject, Identifiable {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !trimmed.contains("/") else { return }
         do {
-            try await backend.makeDirectory(remoteJoin(currentPath, trimmed))
+            let path = remoteJoin(currentPath, trimmed)
+            try await backend.makeDirectory(path)
             status = loc("Folder created: \(trimmed)", "Папка создана: \(trimmed)", "Ordner erstellt: \(trimmed)", "Carpeta creada: \(trimmed)")
             await refresh()
+            setUndo([(path, true)])
         } catch {
             status = loc("Couldn't create folder: \(humanReadable(error))", "Не удалось создать папку: \(humanReadable(error))", "Ordner-Fehler: \(humanReadable(error))", "Error al crear carpeta: \(humanReadable(error))")
         }
@@ -267,9 +284,11 @@ final class SFTPManager: ObservableObject, Identifiable {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !trimmed.contains("/") else { return }
         do {
-            try await backend.writeFile(remoteJoin(currentPath, trimmed), data: Data(), onProgress: { _ in })
+            let path = remoteJoin(currentPath, trimmed)
+            try await backend.writeFile(path, data: Data(), onProgress: { _ in })
             status = loc("File created: \(trimmed)", "Файл создан: \(trimmed)", "Datei erstellt: \(trimmed)", "Archivo creado: \(trimmed)")
             await refresh()
+            setUndo([(path, false)])
         } catch {
             status = loc("Couldn't create file: \(humanReadable(error))", "Не удалось создать файл: \(humanReadable(error))", "Datei-Fehler: \(humanReadable(error))", "Error al crear archivo: \(humanReadable(error))")
         }
@@ -380,6 +399,7 @@ final class SFTPManager: ObservableObject, Identifiable {
             try await copy(from: source, to: dest, isDirectory: entry.isDirectory)
             status = loc("Copy created: \(destName)", "Создана копия: \(destName)", "Kopie erstellt: \(destName)", "Copia creada: \(destName)")
             await refresh()
+            setUndo([(dest, entry.isDirectory)])
         } catch {
             status = loc("Duplicate error: \(humanReadable(error))", "Ошибка дублирования: \(humanReadable(error))", "Fehler beim Duplizieren: \(humanReadable(error))", "Error al duplicar: \(humanReadable(error))")
         }
@@ -400,6 +420,8 @@ final class SFTPManager: ObservableObject, Identifiable {
 
     private func copy(from: String, to: String, isDirectory: Bool) async throws {
         guard let backend else { return }
+        // Prefer a fast server-side copy (cp over SSH); fall back to read+write.
+        if await backend.serverCopy(from: from, to: to) { return }
         if isDirectory {
             try await backend.makeDirectory(to)
             for child in try await children(of: from) {
@@ -411,6 +433,119 @@ final class SFTPManager: ObservableObject, Identifiable {
             let data = try await backend.readFile(from)
             try await backend.writeFile(to, data: data, onProgress: { _ in })
         }
+    }
+
+    // MARK: - Copy / paste (across directories on the server)
+
+    func copyToClipboard(_ entries: [RemoteEntry]) {
+        guard !entries.isEmpty else { return }
+        clipboard = entries.map {
+            ClipboardItem(sourcePath: remoteJoin(currentPath, $0.name),
+                          name: $0.name, isDirectory: $0.isDirectory)
+        }
+        status = loc("Copied \(clipboard.count) item(s) — go to a folder and paste", "Скопировано объектов: \(clipboard.count) — перейдите в папку и вставьте", "Kopiert: \(clipboard.count) — Ordner öffnen und einfügen", "Copiados: \(clipboard.count) — abre una carpeta y pega")
+    }
+
+    func paste() {
+        guard !clipboard.isEmpty else { return }
+        Task { await pasteItems() }
+    }
+
+    private func pasteItems() async {
+        guard backend != nil, !clipboard.isEmpty else { return }
+        let targetDir = currentPath
+        var existing = Set(entries.map { $0.name })
+        isBusy = true
+        var created: [(path: String, isDir: Bool)] = []
+        do {
+            for item in clipboard {
+                let destName = uniqueName(item.name, isDirectory: item.isDirectory, existing: existing)
+                let dest = remoteJoin(targetDir, destName)
+                if dest == item.sourcePath { continue }   // no-op safety
+                try await copy(from: item.sourcePath, to: dest, isDirectory: item.isDirectory)
+                existing.insert(destName)
+                created.append((dest, item.isDirectory))
+            }
+            status = loc("Pasted \(created.count) item(s) — ⌘Z to undo", "Вставлено объектов: \(created.count) — ⌘Z отмена", "Eingefügt: \(created.count) — ⌘Z rückgängig", "Pegados: \(created.count) — ⌘Z deshacer")
+            await refresh()
+            setUndo(created)
+        } catch {
+            status = loc("Paste error: \(humanReadable(error))", "Ошибка вставки: \(humanReadable(error))", "Einfüge-Fehler: \(humanReadable(error))", "Error al pegar: \(humanReadable(error))")
+        }
+        isBusy = false
+    }
+
+    private func uniqueName(_ name: String, isDirectory: Bool, existing: Set<String>) -> String {
+        guard existing.contains(name) else { return name }
+        let ns = name as NSString
+        let ext = isDirectory ? "" : ns.pathExtension
+        let base = ext.isEmpty ? name : ns.deletingPathExtension
+        func candidate(_ suffix: String) -> String {
+            ext.isEmpty ? "\(base)\(suffix)" : "\(base)\(suffix).\(ext)"
+        }
+        var result = candidate(" copy")
+        var i = 2
+        while existing.contains(result) { result = candidate(" copy \(i)"); i += 1 }
+        return result
+    }
+
+    // MARK: - Undo (of the last create/paste/duplicate)
+
+    private func setUndo(_ items: [(path: String, isDir: Bool)]) {
+        undoItems = items
+        canUndo = !items.isEmpty
+    }
+
+    private func clearUndo() {
+        undoItems = []
+        canUndo = false
+    }
+
+    func undo() {
+        guard canUndo, !undoItems.isEmpty else { return }
+        Task { await performUndo() }
+    }
+
+    // MARK: - SSH command console
+
+    func runShell(_ command: String) async {
+        guard let backend, backend.supportsShell, !terminalBusy else { return }
+        let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        terminalLog += "\(currentPath) $ \(trimmed)\n"
+        terminalBusy = true
+        do {
+            let output = try await backend.runShell(trimmed, in: currentPath)
+            terminalLog += output
+            if !output.isEmpty, !output.hasSuffix("\n") { terminalLog += "\n" }
+        } catch {
+            terminalLog += "⚠︎ \(humanReadable(error))\n"
+        }
+        terminalBusy = false
+        // The command may have changed the directory contents.
+        await refresh()
+    }
+
+    func clearTerminal() {
+        terminalLog = ""
+    }
+
+    private func performUndo() async {
+        guard backend != nil, !undoItems.isEmpty else { return }
+        let items = undoItems
+        clearUndo()
+        isBusy = true
+        do {
+            for item in items {
+                try await remove(path: item.path, isDirectory: item.isDir)
+                openFiles.removeAll { $0.remotePath == item.path }
+            }
+            status = loc("Undone (\(items.count))", "Отменено (\(items.count))", "Rückgängig (\(items.count))", "Deshecho (\(items.count))")
+            await refresh()
+        } catch {
+            status = loc("Undo error: \(humanReadable(error))", "Ошибка отмены: \(humanReadable(error))", "Rückgängig-Fehler: \(humanReadable(error))", "Error al deshacer: \(humanReadable(error))")
+        }
+        isBusy = false
     }
 
     /// Real child entries of a directory (name + isDir), excluding . and ..

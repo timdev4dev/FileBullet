@@ -71,6 +71,15 @@ final class FTPBackend: Backend {
         try await runQuote(["SITE CHOWN \(spec) \(path)"], near: path)
     }
 
+    // FTP has no standard server-side copy — fall back to download+upload.
+    func serverCopy(from: String, to: String) async -> Bool { false }
+
+    let supportsShell = false
+
+    func runShell(_ command: String, in directory: String) async throws -> String {
+        throw BackendError(message: "Shell is not available over FTP.")
+    }
+
     func disconnect() async {}
 
     // MARK: URLs

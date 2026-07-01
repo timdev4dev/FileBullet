@@ -138,6 +138,26 @@ final class SFTPBackend: Backend {
         "'" + string.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
+    func serverCopy(from: String, to: String) async -> Bool {
+        guard let client else { return false }
+        let command = "cp -a -- \(shellQuote(from)) \(shellQuote(to))"
+        do {
+            _ = try await client.executeCommand(command, mergeStreams: true)
+            return true
+        } catch {
+            return false   // no cp / failed → caller falls back to read+write
+        }
+    }
+
+    let supportsShell = true
+
+    func runShell(_ command: String, in directory: String) async throws -> String {
+        guard let client else { throw BackendError(message: "Not connected") }
+        let full = "cd \(shellQuote(directory)) 2>/dev/null; \(command)"
+        let buffer = try await client.executeCommand(full, mergeStreams: true, inShell: true)
+        return String(decoding: buffer.readableBytesView, as: UTF8.self)
+    }
+
     func disconnect() async {
         try? await sftp?.close()
         try? await client?.close()

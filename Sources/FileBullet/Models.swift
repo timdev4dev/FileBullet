@@ -77,6 +77,14 @@ struct RemoteEntry: Identifiable {
     }
 }
 
+/// An entry copied to the in-app clipboard for paste elsewhere on the server.
+struct ClipboardItem: Identifiable {
+    let id = UUID()
+    let sourcePath: String
+    let name: String
+    let isDirectory: Bool
+}
+
 /// Sync lifecycle of a file we downloaded and handed off to an external editor.
 enum SyncState: Equatable {
     case synced

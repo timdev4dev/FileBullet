@@ -24,6 +24,9 @@ struct FileTableView: NSViewRepresentable {
     var onPermissions: (RemoteEntry) -> Void
     var onDelete: ([RemoteEntry]) -> Void
     var onFavorite: (RemoteEntry) -> Void
+    var onCopy: ([RemoteEntry]) -> Void
+    var onPaste: () -> Void
+    var canPaste: Bool
     var onNewFolder: () -> Void
     var onNewFile: () -> Void
     var onRefresh: () -> Void
@@ -352,6 +355,11 @@ struct FileTableView: NSViewRepresentable {
             guard let table, table.clickedRow >= 0, table.clickedRow < entries.count else {
                 contextEntry = nil
                 contextRow = -1
+                contextTargets = []
+                if parent.canPaste {
+                    addItem(menu, loc("Paste", "Вставить", "Einfügen", "Pegar"), #selector(ctxPaste))
+                    menu.addItem(.separator())
+                }
                 addItem(menu, loc("New Folder…", "Создать папку…", "Neuer Ordner…", "Nueva carpeta…"), #selector(ctxNewFolder))
                 addItem(menu, loc("New File…", "Создать файл…", "Neue Datei…", "Nuevo archivo…"), #selector(ctxNewFile))
                 menu.addItem(.separator())
@@ -370,6 +378,11 @@ struct FileTableView: NSViewRepresentable {
             contextTargets = targets
 
             if targets.count > 1 {
+                addItem(menu, loc("Copy", "Копировать", "Kopieren", "Copiar"), #selector(ctxCopy))
+                if parent.canPaste {
+                    addItem(menu, loc("Paste", "Вставить", "Einfügen", "Pegar"), #selector(ctxPaste))
+                }
+                menu.addItem(.separator())
                 addItem(menu, loc("Download \(targets.count) items…", "Скачать (\(targets.count))…", "\(targets.count) herunterladen…", "Descargar (\(targets.count))…"), #selector(ctxDownload))
                 addItem(menu, loc("Copy Paths", "Скопировать пути", "Pfade kopieren", "Copiar rutas"), #selector(ctxCopyPath))
                 menu.addItem(.separator())
@@ -412,6 +425,10 @@ struct FileTableView: NSViewRepresentable {
             addItem(menu, loc("Download…", "Скачать…", "Herunterladen…", "Descargar…"), #selector(ctxDownload))
             addItem(menu, loc("Copy Path", "Скопировать путь", "Pfad kopieren", "Copiar ruta"), #selector(ctxCopyPath))
             menu.addItem(.separator())
+            addItem(menu, loc("Copy", "Копировать", "Kopieren", "Copiar"), #selector(ctxCopy))
+            if parent.canPaste {
+                addItem(menu, loc("Paste", "Вставить", "Einfügen", "Pegar"), #selector(ctxPaste))
+            }
             addItem(menu, loc("Duplicate", "Дублировать", "Duplizieren", "Duplicar"), #selector(ctxDuplicate))
             addItem(menu, loc("Rename…", "Переименовать…", "Umbenennen…", "Renombrar…"), #selector(ctxRename))
             addItem(menu, loc("Permissions…", "Права доступа…", "Rechte…", "Permisos…"), #selector(ctxPermissions))
@@ -515,6 +532,14 @@ struct FileTableView: NSViewRepresentable {
 
         @objc private func ctxRefresh() {
             parent.onRefresh()
+        }
+
+        @objc private func ctxCopy() {
+            if !contextTargets.isEmpty { parent.onCopy(contextTargets) }
+        }
+
+        @objc private func ctxPaste() {
+            parent.onPaste()
         }
 
         @objc private func ctxNewFolder() {

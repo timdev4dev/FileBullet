@@ -369,14 +369,26 @@ struct BrowserView: View {
         return manager.entries.filter { $0.name.localizedCaseInsensitiveContains(q) }
     }
 
+    private var browserSplit: some View {
+        HSplitView {
+            fileList
+            Sidebar(manager: manager, favorites: favorites)
+                .frame(minWidth: 200, idealWidth: 250, maxWidth: 360)
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             toolbar
             Divider()
-            HSplitView {
-                fileList
-                Sidebar(manager: manager, favorites: favorites)
-                    .frame(minWidth: 200, idealWidth: 250, maxWidth: 360)
+            if manager.terminalVisible && manager.shellSupported {
+                VSplitView {
+                    browserSplit
+                    TerminalPanel(manager: manager)
+                        .frame(minHeight: 120, idealHeight: 200)
+                }
+            } else {
+                browserSplit
             }
         }
         .onChange(of: manager.currentPath) { _, _ in search = "" }
@@ -466,6 +478,33 @@ struct BrowserView: View {
             .keyboardShortcut(.delete, modifiers: .command)
             .disabled(manager.selectedEntryIDs.isEmpty)
 
+            Button {
+                manager.copyToClipboard(selectedEntries)
+            } label: {
+                Image(systemName: "doc.on.doc")
+            }
+            .help(loc("Copy (⌘C)", "Копировать (⌘C)", "Kopieren (⌘C)", "Copiar (⌘C)"))
+            .keyboardShortcut("c", modifiers: .command)
+            .disabled(manager.selectedEntryIDs.isEmpty)
+
+            Button {
+                manager.paste()
+            } label: {
+                Image(systemName: "doc.on.clipboard")
+            }
+            .help(loc("Paste (⌘V)", "Вставить (⌘V)", "Einfügen (⌘V)", "Pegar (⌘V)"))
+            .keyboardShortcut("v", modifiers: .command)
+            .disabled(manager.clipboard.isEmpty)
+
+            Button {
+                manager.undo()
+            } label: {
+                Image(systemName: "arrow.uturn.backward")
+            }
+            .help(loc("Undo last create/paste (⌘Z)", "Отменить последнее создание/вставку (⌘Z)", "Letztes rückgängig (⌘Z)", "Deshacer último (⌘Z)"))
+            .keyboardShortcut("z", modifiers: .command)
+            .disabled(!manager.canUndo)
+
             TextField(loc("Path", "Путь", "Pfad", "Ruta"), text: Binding(
                 get: { manager.currentPath },
                 set: { _ in }
@@ -494,6 +533,15 @@ struct BrowserView: View {
             if manager.isBusy {
                 ProgressView().controlSize(.small)
             }
+
+            Button {
+                manager.terminalVisible.toggle()
+            } label: {
+                Image(systemName: "terminal")
+                    .foregroundStyle(manager.terminalVisible ? Color.accentColor : Color.primary)
+            }
+            .help(loc("Terminal", "Терминал", "Terminal", "Terminal"))
+            .disabled(!manager.shellSupported)
 
             Button(loc("Disconnect", "Отключиться", "Trennen", "Desconectar")) {
                 Task { await manager.disconnect() }
@@ -553,6 +601,9 @@ struct BrowserView: View {
                 favorites.add(host: manager.connectedHost,
                               path: remoteJoin(manager.currentPath, entry.name))
             },
+            onCopy: { manager.copyToClipboard($0) },
+            onPaste: { manager.paste() },
+            canPaste: !manager.clipboard.isEmpty,
             onNewFolder: { newItemName = ""; newItemKind = .folder },
             onNewFile: { newItemName = ""; newItemKind = .file },
             onRefresh: { Task { await manager.refresh() } }
@@ -760,6 +811,70 @@ struct OpenFilesPanel: View {
         case .uploading: return .blue
         case .error: return .orange
         }
+    }
+}
+
+// MARK: - SSH command console
+
+struct TerminalPanel: View {
+    @ObservedObject var manager: SFTPManager
+    @State private var input = ""
+    @FocusState private var inputFocused: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "terminal")
+                Text(loc("Terminal", "Терминал", "Terminal", "Terminal")).font(.headline)
+                if manager.terminalBusy { ProgressView().controlSize(.small) }
+                Spacer()
+                Button { manager.clearTerminal() } label: { Image(systemName: "trash") }
+                    .buttonStyle(.borderless)
+                    .help(loc("Clear", "Очистить", "Leeren", "Limpiar"))
+                Button { manager.terminalVisible = false } label: { Image(systemName: "xmark") }
+                    .buttonStyle(.borderless)
+                    .help(loc("Close", "Закрыть", "Schließen", "Cerrar"))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            Divider()
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    Text(manager.terminalLog)
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                    Color.clear.frame(height: 1).id("end")
+                }
+                .onChange(of: manager.terminalLog) { _, _ in
+                    withAnimation(.linear(duration: 0.1)) { proxy.scrollTo("end", anchor: .bottom) }
+                }
+            }
+
+            Divider()
+            HStack(spacing: 6) {
+                Text("$").foregroundStyle(.secondary)
+                    .font(.system(.body, design: .monospaced))
+                TextField(loc("Type a command…", "Введите команду…", "Befehl eingeben…", "Escribe un comando…"), text: $input)
+                    .textFieldStyle(.plain)
+                    .font(.system(.body, design: .monospaced))
+                    .focused($inputFocused)
+                    .onSubmit(run)
+                    .disabled(manager.terminalBusy)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+        }
+        .background(Color(nsColor: .textBackgroundColor))
+        .onAppear { inputFocused = true }
+    }
+
+    private func run() {
+        let command = input
+        input = ""
+        Task { await manager.runShell(command) }
     }
 }
 

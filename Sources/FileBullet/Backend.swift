@@ -41,6 +41,13 @@ protocol Backend: AnyObject {
     func makeDirectory(_ path: String) async throws
     func setPermissions(_ path: String, mode: UInt32) async throws
     func setOwner(_ path: String, owner: String, group: String?) async throws
+    /// Server-side copy if supported (e.g. `cp` over SSH). Returns false if the
+    /// caller should fall back to a download+upload copy.
+    func serverCopy(from: String, to: String) async -> Bool
+    /// Whether an interactive shell is available (SSH yes, FTP no).
+    var supportsShell: Bool { get }
+    /// Run a shell command in `directory`, returning combined stdout/stderr.
+    func runShell(_ command: String, in directory: String) async throws -> String
     func disconnect() async
 }
 
