@@ -84,6 +84,19 @@ Requires **macOS 14 (Sonoma)** or later. Apple Silicon and Intel.
 - One click jumps to a favorite — and from the connection screen it will
   reconnect (using saved credentials) and navigate there.
 
+### Terminal (SFTP)
+- A real **VT/xterm terminal** in a resizable bottom panel, running an
+  interactive SSH shell over the same connection — `vim`, `htop`, colors,
+  window resize and clipboard all work.
+- The session survives switching tabs; closing the panel or disconnecting ends it.
+- On macOS 14 this falls back to a simple one-shot command console.
+
+### More
+- **Copy / Paste** files and folders elsewhere on the server, **Cut/Undo (⌘Z)**,
+  create **new folders/files**, **rename** in place, **chmod & chown**,
+  multi-select with bulk actions, an in-folder **search** filter, and
+  **⌘⌫** to delete. Idle SSH connections are kept alive and auto-reconnect.
+
 ### Localization
 - UI in **English (default), Russian, German and Spanish**, following the system
   language and falling back to English.
@@ -108,7 +121,9 @@ protocol-agnostic:
   `RNFR/RNTO`, `DELE`, `RMD`, `MKD`, `SITE CHMOD`).
 
 The file list is a native `NSTableView` (wrapped in SwiftUI) for instant
-selection, real double-click actions, sortable columns and context menus.
+selection, real double-click actions, sortable columns and context menus. The
+terminal is [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) bound to an
+SSH PTY via Citadel's `withPTY`.
 
 ## Releases (CI/CD)
 
