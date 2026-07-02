@@ -158,6 +158,12 @@ final class SFTPBackend: Backend {
         return String(decoding: buffer.readableBytesView, as: UTF8.self)
     }
 
+    @available(macOS 15.0, *)
+    func makeTerminalHost() -> TerminalHost? {
+        guard let client else { return nil }
+        return TerminalHost(client: client)
+    }
+
     func disconnect() async {
         try? await sftp?.close()
         try? await client?.close()

@@ -26,6 +26,25 @@ final class SFTPManager: ObservableObject, Identifiable {
     @Published var terminalBusy = false
     @Published var terminalLog = ""
 
+    /// Persistent terminal (TerminalHost, macOS 15+) — kept across tab switches.
+    private var terminalHostBox: AnyObject?
+
+    @available(macOS 15.0, *)
+    func terminalHost() -> TerminalHost? {
+        if let existing = terminalHostBox as? TerminalHost { return existing }
+        guard let host = (backend as? SFTPBackend)?.makeTerminalHost() else { return nil }
+        terminalHostBox = host
+        return host
+    }
+
+    /// Explicitly close the terminal: end the shell session and hide the panel.
+    /// (Switching tabs keeps the session; this is a deliberate close.)
+    func closeTerminal() {
+        if #available(macOS 15.0, *) { (terminalHostBox as? TerminalHost)?.stop() }
+        terminalHostBox = nil
+        terminalVisible = false
+    }
+
     // Drag & drop upload progress (byte-level).
     @Published var uploadInProgress = false
     @Published var uploadTotalBytes: Int64 = 0
@@ -104,6 +123,8 @@ final class SFTPManager: ObservableObject, Identifiable {
         shellSupported = false
         terminalVisible = false
         terminalLog = ""
+        if #available(macOS 15.0, *) { (terminalHostBox as? TerminalHost)?.stop() }
+        terminalHostBox = nil
         tabTitle = loc("New connection", "Новое подключение", "Neue Verbindung", "Nueva conexión")
         status = loc("Disconnected.", "Отключено.", "Getrennt.", "Desconectado.")
     }
@@ -225,8 +246,12 @@ final class SFTPManager: ObservableObject, Identifiable {
         isBusy = true
         do {
             let data = try await backend.readFile(remotePath)
-            try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
-            let localURL = cacheDir.appendingPathComponent(entry.name)
+            // Mirror the full remote path in the cache so same-named files from
+            // different folders don't collide (each gets a distinct local file).
+            let relative = remotePath.hasPrefix("/") ? String(remotePath.dropFirst()) : remotePath
+            let localURL = cacheDir.appendingPathComponent(relative)
+            try FileManager.default.createDirectory(
+                at: localURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try data.write(to: localURL)
 
             let mtime = modificationDate(of: localURL) ?? Date()

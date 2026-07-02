@@ -384,8 +384,14 @@ struct BrowserView: View {
             if manager.terminalVisible && manager.shellSupported {
                 VSplitView {
                     browserSplit
-                    TerminalPanel(manager: manager)
-                        .frame(minHeight: 120, idealHeight: 200)
+                    Group {
+                        if #available(macOS 15.0, *) {
+                            TerminalContainer(manager: manager)
+                        } else {
+                            TerminalPanel(manager: manager)
+                        }
+                    }
+                    .frame(minHeight: 140, idealHeight: 240)
                 }
             } else {
                 browserSplit
@@ -535,7 +541,11 @@ struct BrowserView: View {
             }
 
             Button {
-                manager.terminalVisible.toggle()
+                if manager.terminalVisible {
+                    manager.closeTerminal()
+                } else {
+                    manager.terminalVisible = true
+                }
             } label: {
                 Image(systemName: "terminal")
                     .foregroundStyle(manager.terminalVisible ? Color.accentColor : Color.primary)
